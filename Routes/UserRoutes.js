@@ -140,7 +140,7 @@ async function generateUniqueRandomUsername() {
 *      '201':
 *        description: User created successfully
 */
-// Handling signup request using router
+// Handling signup request using router (Done implementing)
 userRouter.post("/signup", async (req, res) => {
     const { name, email, mobile, password } = req.body;
 
@@ -206,7 +206,7 @@ userRouter.post("/signup", async (req, res) => {
 
 
 
-// Verify OTP route for SignUp
+// Verify OTP route for SignUp (Implementation done)
 userRouter.post("/signup/otp/verify", async (req, res) => {
     const { email, otp } = req.body;
 
@@ -226,7 +226,7 @@ userRouter.post("/signup/otp/verify", async (req, res) => {
         await user.save();
 
         // Generate access token (1 hour expiry)
-        const accessToken = jwt.sign({ id: user._id }, process.env.JWT_TOKEN, { expiresIn: "1h" });
+        const accessToken = jwt.sign({ id: user._id }, process.env.JWT_TOKEN, { expiresIn: "1m" });
 
         // Generate long-lived refresh token (e.g., 10 years or "forever")
         const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_TOKEN, { expiresIn: "180d" });
@@ -243,13 +243,13 @@ userRouter.post("/signup/otp/verify", async (req, res) => {
         });
     } catch (err) {
         console.error("Error verifying OTP:", err);
-        res.status(500).send("Error verifying OTP");
+        res.status(500).send({message: "Error verifying OTP"});
     }
 });
 
 
 
-// SignIn with password route
+// SignIn with password route (implementation done)
 userRouter.post("/signin", async (req, res) => {
     const { email, password } = req.body;
 
@@ -257,11 +257,11 @@ userRouter.post("/signin", async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user || !user.isVerified) {
-            return res.status(400).send("User not registered or email not verified. Please signup and verify your email.");
+            return res.status(400).send({message: "User not registered or email not verified. Please signup and verify your email."}); //tested ok
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) return res.status(400).send("Invalid credentials");
+        if (!isPasswordValid) return res.status(400).send({message: "Invalid credentials"}); //tested ok
 
         // Generate access token (1 hour expiry)
         const accessToken = jwt.sign({ id: user._id }, process.env.JWT_TOKEN, { expiresIn: "1h" });
@@ -277,16 +277,16 @@ userRouter.post("/signin", async (req, res) => {
         res.send({ message: "Login successful", accessToken, refreshToken });
     } catch (err) {
         console.error("Error signing in:", err);
-        res.status(500).send("Error signing in");
+        res.status(500).send({message: "Error signing in"});
     }
 });
 
-//refreshToken
+//refreshToken (implemented code)
 userRouter.post("/refresh", async (req, res) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-        return res.status(400).send("Refresh token is required");
+        return res.status(400).send({message: "Refresh token is required"}); //tested OK
     }
 
     try {
@@ -297,30 +297,30 @@ userRouter.post("/refresh", async (req, res) => {
         const user = await User.findById(decoded.id);
 
         if (!user || user.refreshToken !== refreshToken) {
-            return res.status(403).send("Invalid or expired refresh token");
+            return res.status(403).send({message: "Invalid or expired refresh token"});
         }
 
         // Issue a new access token
-        const accessToken = jwt.sign({ id: decoded.id }, process.env.JWT_TOKEN, { expiresIn: "1h" });
+        const accessToken = jwt.sign({ id: decoded.id }, process.env.JWT_TOKEN, { expiresIn: "1m" });
 
         res.send({ accessToken });
     } catch (err) {
         console.error("Error refreshing token:", err);
-        res.status(403).send("Invalid refresh token or expired");
+        res.status(500).send({message: "Invalid refresh token or expired"});
     }
 });
 
 
 
-// Generate OTP for Sign In
+// SignIn with otp
 userRouter.post("/signin/otp", async (req, res) => {
     const { email } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).send("User not found");
+        if (!user) return res.status(400).send({message: "User not found"});
 
         if (!user.isVerified) {
-            return res.status(400).send("User not verified. Please complete the signup process.");
+            return res.status(400).send({message: "User not verified. Please complete the signup process."});
         }
 
         const otp = crypto.randomInt(100000, 999999).toString();
@@ -330,24 +330,24 @@ userRouter.post("/signin/otp", async (req, res) => {
         await user.save();
 
         await sendEmail(email, "Verify Your Login", `Your OTP is ${otp}`);
-        res.send("OTP sent to your email. Please verify to login.");
+        res.send({message: "OTP sent to your email. Please verify to login."});
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error generating OTP");
+        res.status(500).send({message: "Error generating OTP"});
     }
 });
 
 
-// Verify OTP for Sign In
+// Verify OTP for Sign In with otp
 userRouter.post("/signin/otp/verify", async (req, res) => {
     const { email, otp } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).send("Invalid OTP");
+        if (!user) return res.status(400).send({message: "Invalid OTP"});
 
         const decryptedOtp = decrypt(user.otp);
         if (decryptedOtp !== otp || user.otpExpires < Date.now()) {
-            return res.status(400).send("OTP expired or invalid");
+            return res.status(400).send({message: "OTP expired or invalid"});
         }
 
         // Clear OTP fields after successful verification
@@ -371,17 +371,17 @@ userRouter.post("/signin/otp/verify", async (req, res) => {
         });
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error verifying OTP");
+        res.status(500).send({message: "Error verifying OTP"});
     }
 });
 
 
-// Resend OTP route
+// Resend OTP route (Done implementing)
 userRouter.post("/resend-otp", async (req, res) => {
     const { email } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).send("User not found");
+        if (!user) return res.status(400).send({message: "User not found"});
 
         const otp = crypto.randomInt(100000, 999999).toString();
         const encryptedOtp = encrypt(otp);
@@ -391,10 +391,10 @@ userRouter.post("/resend-otp", async (req, res) => {
 
         await sendEmail(email, "Your OTP", `Your OTP is: ${otp}`);
 
-        res.send("OTP resent to your email.");
+        res.send({message: "OTP resent to your email."});
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error resending OTP");
+        res.status(500).send({message: "Error resending OTP"});
     }
 });
 
@@ -405,7 +405,7 @@ userRouter.get("/check-login-status", authenticateToken, (req, res) => {
         return res.status(403).send({ message: "User is not verified. Please verify your email." });
     }
 
-    res.send({
+    res.status(200).send({
         message: "User is logged in and verified",
         user: {
             id: _id,
@@ -422,7 +422,7 @@ userRouter.post("/logout", async (req, res) => {
     const { refreshToken, accessToken } = req.body;
 
     if (!refreshToken || !accessToken) {
-        return res.status(400).send("Refresh token and access token are required");
+        return res.status(400).send({message: "Refresh token and access token are required"});
     }
 
     try {
@@ -433,7 +433,7 @@ userRouter.post("/logout", async (req, res) => {
         const user = await User.findById(decoded.id);
 
         if (!user || user.refreshToken !== refreshToken) {
-            return res.status(403).send("Invalid or expired refresh token");
+            return res.status(403).send({message: "Invalid or expired refresh token"});
         }
 
         // Remove refresh token from the user document
@@ -443,10 +443,10 @@ userRouter.post("/logout", async (req, res) => {
         // Blacklist the access token
         await BlacklistedToken.create({ token: accessToken });
 
-        res.send("Logout successful. Access token is now blacklisted.");
+        res.send({message: "Logout successful. Access token is now blacklisted."});
     } catch (err) {
         console.error("Error logging out:", err);
-        res.status(500).send("Error logging out");
+        res.status(500).send({message: "Error logging out"});
     }
 });
 
@@ -456,7 +456,7 @@ userRouter.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).send("User not found");
+        if (!user) return res.status(400).send({message: "User not found"});
 
         const otp = crypto.randomInt(100000, 999999).toString();
         const encryptedOtp = encrypt(otp);
@@ -465,10 +465,10 @@ userRouter.post("/forgot-password", async (req, res) => {
         await user.save();
 
         await sendEmail(email, "Your OTP for Password Reset", `Your OTP is: ${otp}`);
-        res.send("OTP sent to your email.");
+        res.send({message: "OTP sent to your email."});
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error sending OTP");
+        res.status(500).send({message: "Error sending OTP"});
     }
 });
 
@@ -476,11 +476,11 @@ userRouter.post("/forget-pass/verify-otp", async (req, res) => {
     const { email, otp } = req.body;
     try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).send("User not found");
+        if (!user) return res.status(400).send({message: "User not found"});
 
         const decryptedOtp = decrypt(user.otp);
         if (decryptedOtp !== otp || user.otpExpires < Date.now()) {
-            return res.status(400).send("Invalid or expired OTP");
+            return res.status(400).send({message: "Invalid or expired OTP"});
         }
 
         // Clear OTP fields
@@ -493,7 +493,7 @@ userRouter.post("/forget-pass/verify-otp", async (req, res) => {
         res.send({ message: "OTP verified. Use this token to reset your password.", resetToken });
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error verifying OTP");
+        res.status(500).send({message: "Error verifying OTP"});
     }
 });
 
@@ -502,23 +502,23 @@ userRouter.post("/reset-password", async (req, res) => {
     const { resetToken, newPassword, confirmPassword } = req.body;
 
     if (newPassword !== confirmPassword) {
-        return res.status(400).send("Passwords do not match");
+        return res.status(400).send({message: "Passwords do not match"});
     }
 
     try {
         const decoded = jwt.verify(resetToken, process.env.JWT_TOKEN);
         const user = await User.findOne({ email: decoded.email });
 
-        if (!user) return res.status(400).send("User not found");
+        if (!user) return res.status(400).send({message: "User not found"});
 
         // Update the password
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
 
-        res.send("Password reset successful. You can now login.");
+        res.send({message: "Password reset successful. You can now login."});
     } catch (err) {
         console.error(err);
-        res.status(400).send("Invalid or expired token");
+        res.status(400).send({message: "Invalid or expired token"});
     }
 });
 
